@@ -61,6 +61,7 @@ from .exercise_source import ExerciseSource
 
 # user logging
 from .user_activitiy_data import UserActivityData
+from .user_commitment import UserCommitment
 
 # teachers and cohorts
 

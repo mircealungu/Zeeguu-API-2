@@ -1,5 +1,4 @@
 services:
-
   # main db
   mysql:
     image: mysql:5.7
@@ -14,7 +13,6 @@ services:
       - zeeguu_backend
     restart: unless-stopped
 
-
   # main db
   fmd_mysql:
     image: mysql:5.7
@@ -28,6 +26,7 @@ services:
     networks:
       - zeeguu_backend
     restart: unless-stopped
+
 
 
   elasticsearch_v8:
@@ -45,6 +44,7 @@ services:
     networks:
       - zeeguu_backend
     restart: unless-stopped
+
     mem_limit: 512m # Useful to restrict the ammount of RAM used by ES.
 
   readability_server:
@@ -110,6 +110,7 @@ services:
       WORDNIK_API_KEY: ${WORDNIK_API_KEY}
       MULTI_LANG_TRANSLATOR_AB_TESTING: ${MULTI_LANG_TRANSLATOR_AB_TESTING}
       ZEEGUU_ES_CONN_STRING: 'http://elasticsearch_v8:9200'
+
       FOLDER_FOR_REPORT_OUTPUT: /zeeguu-data/crawl-reports
       CRAWL_REPORT_DATA: /zeeguu-data/crawl-reports/data
       ZEEGUU_EMB_API_CONN_STRING: "http://embedding_api:3654"
@@ -122,7 +123,6 @@ services:
   zapi_dev: &zapi_dev
     <<: *zapi_default
     command: python /Zeeguu-API/start.py
-
   zapi_dev_translations:
     <<: *zapi_dev
     environment:
@@ -132,4 +132,3 @@ services:
 
 networks:
   zeeguu_backend:
-

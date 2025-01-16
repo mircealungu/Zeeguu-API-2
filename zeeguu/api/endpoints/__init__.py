@@ -33,3 +33,5 @@ from . import user_notifications
 from .student import *
 from .nlp import *
 from .reading_sessions import *
+from .user_activity_and_commitment import *
+
