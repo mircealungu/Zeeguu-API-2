@@ -52,6 +52,18 @@ class Bookmark(db.Model):
     text_id = db.Column(db.Integer, db.ForeignKey(Text.id))
     text = db.relationship(Text)
 
+    """
+    The bookmarks will have a reference to the sentence / token in relation
+    to the text they are associaed with. So sentence_i and token_i refer to the
+    start of the text. 
+
+    Since the words can be merged to give a better translation, in those cases we 
+    have the first word and then the total tokens after it that were merged.
+    """
+    sentence_i = db.Column(db.Integer)
+    token_i = db.Column(db.Integer)
+    total_tokens = db.Column(db.Integer)
+
     time = db.Column(db.DateTime)
 
     exercise_log = relationship(
@@ -80,6 +92,9 @@ class Bookmark(db.Model):
         text: str,
         time: datetime,
         learning_cycle: int = LearningCycle.NOT_SET,
+        sentence_i: int = None,
+        token_i: int = None,
+        total_tokens: int = None,
         level: int = 0,
     ):
         self.origin = origin
@@ -91,6 +106,9 @@ class Bookmark(db.Model):
         self.fit_for_study = fit_for_study(self)
         self.learning_cycle = learning_cycle
         self.user_preference = UserWordExPreference.NO_PREFERENCE
+        self.sentence_i = sentence_i
+        self.token_i = token_i
+        self.total_tokens = total_tokens
         self.level = level
 
     def __repr__(self):
@@ -103,10 +121,19 @@ class Bookmark(db.Model):
         )
 
     def serializable_dictionary(self):
+
         return dict(
+            bookmark_id=self.id,
             origin=self.origin.word,
             translation=self.translation.word,
             context=self.text.content,
+            t_sentence_i=self.sentence_i,
+            t_token_i=self.token_i,
+            t_total_token=self.total_tokens,
+            context_paragraph=self.text.paragraph_i,
+            context_sent=self.text.sentence_i,
+            context_token=self.text.token_i,
+            in_content=self.text.in_content,
         )
 
     def is_learned(self):
@@ -287,7 +314,13 @@ class Bookmark(db.Model):
 
         result["from"] = self.origin.word
         if with_context:
+            from zeeguu.core.util.text import tokenize_text
+
             result["context"] = self.text.content
+            result["context_tokenized"] = tokenize_text(
+                self.text.content, self.origin.language
+            )
+
         return result
 
     @classmethod
@@ -302,6 +335,13 @@ class Bookmark(db.Model):
         _context: str,
         article_id: int,
         learning_cycle: int = LearningCycle.NOT_SET,
+        sentence_i: int = None,
+        token_i: int = None,
+        total_tokens: int = None,
+        c_paragraph_i: int = None,
+        c_sentence_i: int = None,
+        c_token_i: int = None,
+        in_content: bool = None,
         level: int = 0,
     ):
         """
@@ -316,7 +356,17 @@ class Bookmark(db.Model):
 
         article = Article.query.filter_by(id=article_id).one()
 
-        context = Text.find_or_create(session, _context, origin_lang, None, article)
+        context = Text.find_or_create(
+            session,
+            _context,
+            origin_lang,
+            None,
+            article,
+            c_paragraph_i,
+            c_sentence_i,
+            c_token_i,
+            in_content,
+        )
 
         translation = UserWord.find_or_create(session, _translation, translation_lang)
 
@@ -337,6 +387,9 @@ class Bookmark(db.Model):
                 context,
                 now,
                 learning_cycle=learning_cycle,
+                sentence_i=sentence_i,
+                token_i=token_i,
+                total_tokens=total_tokens,
                 level=level,
             )
         except Exception as e:

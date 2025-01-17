@@ -20,6 +20,7 @@ from zeeguu.core.model.user_word import UserWord
 from . import api, db_session
 from zeeguu.api.utils.json_result import json_result
 from zeeguu.api.utils.route_wrappers import cross_domain, requires_session
+from zeeguu.api.utils.parse_json_boolean import parse_json_boolean
 
 punctuation_extended = "»«" + punctuation
 IS_DEV_SKIP_TRANSLATION = int(os.environ.get("DEV_SKIP_TRANSLATION", 0)) == 1
@@ -44,9 +45,15 @@ def get_one_translation(from_lang_code, to_lang_code):
     """
 
     word_str = request.form["word"].strip(punctuation_extended)
+    w_sent_i = request.form.get("w_sent_i", None)
+    w_token_i = request.form.get("w_token_i", None)
+    w_total_tokens = request.form.get("w_total_tokens", None)
     context = request.form.get("context", "").strip()
+    c_paragraph_i = request.form.get("c_paragraph_i", None)
+    c_sent_i = request.form.get("c_sent_i", None)
+    c_token_i = request.form.get("c_token_i", None)
     article_id = request.form.get("articleID", None)
-
+    in_content = parse_json_boolean(request.form.get("in_content", None))
     query = TranslationQuery.for_word_occurrence(word_str, context, 1, 7)
 
     # if we have an own translation that is our first "best guess"
@@ -96,6 +103,13 @@ def get_one_translation(from_lang_code, to_lang_code):
             to_lang_code,
             context,
             article_id,
+            c_paragraph_i=c_paragraph_i,
+            c_sentence_i=c_sent_i,
+            c_token_i=c_token_i,
+            in_content=in_content,
+            sentence_i=w_sent_i,
+            token_i=w_token_i,
+            total_tokens=w_total_tokens,
         )
 
     return json_result(
@@ -192,16 +206,44 @@ def update_translation(bookmark_id):
     translation = UserWord.find_or_create(
         db_session, translation_str, bookmark.translation.language
     )
+    prev_text = Text.find_by_id(bookmark.text_id)
+    is_same_context = prev_text.content == context_str
     text = Text.find_or_create(
         db_session,
         context_str,
         bookmark.origin.language,
         bookmark.text.url,
-        bookmark.text.article,
+        bookmark.text.article if is_same_context else None,
+        prev_text.paragraph_i if is_same_context else None,
+        prev_text.sentence_i if is_same_context else None,
+        prev_text.token_i if is_same_context else None,
+        prev_text.in_content if is_same_context else None,
     )
+
     bookmark.origin = origin
     bookmark.translation = translation
     bookmark.text = text
+
+    if not is_same_context or bookmark.origin.word != word_str:
+        # In the frontend it's mandatory that the bookmark is in the text,
+        # so we update the pointer.
+        from zeeguu.core.util.text import tokenize_text_flat_array
+
+        # Tokenized text returns paragraph, sents, token
+        # Since we know there is not multiple paragraphs, we take the first
+        tokenized_text = tokenize_text_flat_array(
+            text.content, bookmark.origin.language, False
+        )
+        tokenized_bookmark = tokenize_text_flat_array(
+            word_str, bookmark.origin.language, False
+        )
+        first_token_ocurrence = next(
+            filter(lambda t: t.text == tokenized_bookmark[0].text, tokenized_text)
+        )
+
+        bookmark.sentence_i = first_token_ocurrence.sent_i
+        bookmark.token_i = first_token_ocurrence.token_i
+        bookmark.total_tokens = len(tokenized_bookmark)
 
     db_session.add(bookmark)
     db_session.commit()
@@ -237,10 +279,6 @@ def contribute_translation(from_lang_code, to_lang_code):
     # when a translation is added by hand, the servicename_translation is None
     # thus we set it to MANUAL
     service_name = request.form.get("servicename_translation", "MANUAL")
-
-    print(request.form)
-    print(url)
-
     article_id = None
     if "articleID" in url:
         article_id = url.split("articleID=")[-1]
@@ -270,8 +308,6 @@ def contribute_translation(from_lang_code, to_lang_code):
         context_str,
         article_id,
     )
-
-    print(bookmark)
 
     # Inform apimux about translation selection
     data = {

@@ -6,6 +6,12 @@ from flask import request
 
 from zeeguu.core.nlp_pipeline import SpacyWrappers, NoiseWordsGenerator
 from zeeguu.core.nlp_pipeline import AutoGECTagging, ContextReducer
+from zeeguu.core.model.language import Language
+from zeeguu.core.util.text import (
+    tokenize_text,
+    sent_tokenizer_text,
+    split_into_paragraphs,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -105,3 +111,52 @@ def get_smaller_context():
     )
 
     return json_result(shorter_context)
+
+
+# ---------------------------------------------------------------------------
+@api.route("/tokenize_text", methods=("POST",))
+# ---------------------------------------------------------------------------
+@cross_domain
+@requires_session
+def get_tokenize_text():
+    """
+    Used by the front-end to tokenize texts. Receives a string of text, and a
+    language of the text and returns the tokenized version, cosisting of a
+    list of Paragraphs composed of tokens.
+    """
+    text = request.form.get("text", "")
+    lang_code = request.form.get("language", "")
+    language = Language.find(lang_code)
+    result = tokenize_text(text, language)
+    return json_result(result)
+
+
+# ---------------------------------------------------------------------------
+@api.route("/tokenize_sents", methods=("POST",))
+# ---------------------------------------------------------------------------
+@cross_domain
+@requires_session
+def get_tokenize_sents():
+    """
+    Used by the front-end to tokenize sentences in texts. Receives a string of text, and
+    a language of the text and returns the tokenized version.
+    """
+    text = request.form.get("text", "")
+    lang_code = request.form.get("language", "")
+    language = Language.find(lang_code)
+    result = sent_tokenizer_text(text, language)
+    return json_result(result)
+
+
+# ---------------------------------------------------------------------------
+@api.route("/get_paragraphs", methods=("POST",))
+# ---------------------------------------------------------------------------
+@cross_domain
+@requires_session
+def get_paragraphs():
+    """
+    Returns the pagraphs of a text.
+    """
+    text = request.form.get("text", "")
+    result = split_into_paragraphs(text)
+    return json_result(result)
